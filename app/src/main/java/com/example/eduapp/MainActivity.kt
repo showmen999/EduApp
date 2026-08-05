@@ -64,7 +64,7 @@ fun AppNav(currentContext: Context){
             val score = backStackEntry.arguments?.getInt("score") ?: 0
             val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
             val level = backStackEntry.arguments?.getInt("level") ?: 1
-            ScoreScreen(navController) // You might want to update ScoreScreen to take these
+            ScoreScreen(navController, score, playerName, level)
         }
         composable("testDB") { TestDBScreen(currentContext) }
     }
