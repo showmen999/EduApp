@@ -202,7 +202,7 @@ fun LandingScreen(navController: NavHostController, modifier: Modifier = Modifie
                     if (username.isBlank()) {
                         showError = true
                     } else {
-                        navController.navigate("game")
+                        navController.navigate("game/$username/$selectedLevel")
                     }
                 },
                 modifier = Modifier

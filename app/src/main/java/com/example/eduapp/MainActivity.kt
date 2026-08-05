@@ -10,9 +10,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.eduapp.screen.GameScreen
 import com.example.eduapp.screen.LandingScreen
 import com.example.eduapp.screen.ScoreScreen
@@ -40,8 +42,30 @@ fun AppNav(currentContext: Context){
     NavHost(navController = navController, startDestination = "landing") {
         composable("landing") { LandingScreen(navController) }
         composable("setting") { SettingScreen(navController) }
-        composable("game") { GameScreen(currentContext, navController) }
-        composable("score") { ScoreScreen(navController) }
+        composable(
+            route = "game/{playerName}/{level}",
+            arguments = listOf(
+                navArgument("playerName") { type = NavType.StringType },
+                navArgument("level") { type = NavType.IntType }
+            )
+        ) { backStackEntry ->
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+            val level = backStackEntry.arguments?.getInt("level") ?: 1
+            GameScreen(currentContext, navController, playerName, level)
+        }
+        composable(
+            route = "score/{score}/{playerName}/{level}",
+            arguments = listOf(
+                navArgument("score") { type = NavType.IntType },
+                navArgument("playerName") { type = NavType.StringType },
+                navArgument("level") { type = NavType.IntType }
+            )
+        ) { backStackEntry ->
+            val score = backStackEntry.arguments?.getInt("score") ?: 0
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+            val level = backStackEntry.arguments?.getInt("level") ?: 1
+            ScoreScreen(navController) // You might want to update ScoreScreen to take these
+        }
         composable("testDB") { TestDBScreen(currentContext) }
     }
 

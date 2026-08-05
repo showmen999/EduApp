@@ -2,71 +2,310 @@ package com.example.eduapp.screen
 
 import android.content.Context
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.eduapp.helper.rememberAssetImage
 
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
-fun GameScreen(currentContext: Context, navController: NavHostController,
-               imagePath: String = "2/level02_pic03_4.jpg",
-               modifier: Modifier = Modifier) {
-    val imageBitmap = rememberAssetImage(imagePath)
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Game Screen") }) }
-    ) {
-            innerPadding ->
-        Column(modifier
+fun GameScreen(
+    currentContext: Context,
+    navController: NavHostController,
+    playerName: String,
+    level: Int,
+    modifier: Modifier = Modifier
+) {
+    // Colors
+    val DeepIndigo = Color(0xFF2E3192)
+    val Violet = Color(0xFF7E57C2)
+    val SoftPlum = Color(0xFF8E24AA)
+    val MintGreen = Color(0xFF64FFDA)
+    val LavenderGrey = Color(0xFFD1D1E9)
+
+    // Quiz State
+    val quizImages = rememberSaveable {
+        val allFiles = currentContext.assets.list(level.toString()) ?: emptyArray()
+        val filtered = allFiles.filter { it.contains("_") && (it.endsWith(".png") || it.endsWith(".jpg")) }
+            .shuffled()
+            .take(6)
+        ArrayList(filtered)
+    }
+
+    var currentIndex by rememberSaveable { mutableIntStateOf(0) }
+    var score by rememberSaveable { mutableIntStateOf(0) }
+    var userAnswer by remember { mutableStateOf("") }
+    var isSubmitted by rememberSaveable { mutableStateOf(false) }
+    var isCorrect by rememberSaveable { mutableStateOf(false) }
+    var showInputError by remember { mutableStateOf(false) }
+
+    val levelName = when (level) {
+        1 -> "Explorer"
+        2 -> "Challenger"
+        3 -> "Champion"
+        else -> "Quiz"
+    }
+
+    val currentImageName = if (quizImages.isNotEmpty()) quizImages[currentIndex] else ""
+    val correctAnswer = if (currentImageName.isNotEmpty()) {
+        currentImageName.substringBeforeLast(".").substringAfterLast("_")
+    } else ""
+
+    val encouragingMessages = listOf(
+        "You're getting closer. Keep going!",
+        "Don't give up, you've got this!",
+        "Every mistake is a lesson. Try the next one!",
+        "Keep your head up! You're doing great."
+    )
+    val randomEncouragement = remember(currentIndex) { encouragingMessages.random() }
+
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
-            .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center) {
-            Text(
-                text = "Displaying Asset Image",
-                style = MaterialTheme.typography.headlineMedium
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap,
-                    contentDescription = "Asset Image: $imagePath",
-                    modifier = Modifier.size(300.dp)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(DeepIndigo, Violet, SoftPlum)
                 )
-            } else {
-                Text(
-                    text = "Error: Could not load image at $imagePath",
-                    color = MaterialTheme.colorScheme.error
+            )
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("$levelName Quiz", color = Color.White, fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
             }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Info Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = playerName,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Question ${currentIndex + 1} / 6",
+                            color = LavenderGrey,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Surface(
+                        color = Color(0x33FFFFFF),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "$score / 60",
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Path: assets/$imagePath",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Button(onClick = {navController.navigate("score")})
-            { Text("Go to Score") }
+                // Progress Bar
+                LinearProgressIndicator(
+                    progress = { (currentIndex + 1) / 6f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MintGreen,
+                    trackColor = Color(0x22FFFFFF),
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Image Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .shadow(12.dp, RoundedCornerShape(24.dp)),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (currentImageName.isNotEmpty()) {
+                            val bitmap = rememberAssetImage("$level/$currentImageName")
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = "Puzzle",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Answer Input
+                OutlinedTextField(
+                    value = userAnswer,
+                    onValueChange = {
+                        if (!isSubmitted) {
+                            userAnswer = it
+                            showInputError = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Your answer", color = LavenderGrey) },
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    enabled = !isSubmitted,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        unfocusedBorderColor = Color(0x66FFFFFF),
+                        focusedBorderColor = MintGreen,
+                        disabledTextColor = Color.White,
+                        disabledBorderColor = Color(0x33FFFFFF)
+                    ),
+                    isError = showInputError
+                )
+
+                if (showInputError) {
+                    Text(
+                        "Please enter an answer",
+                        color = Color(0xFFFF8A80),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.align(Alignment.Start).padding(top = 4.dp, start = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Submit Button
+                if (!isSubmitted) {
+                    Button(
+                        onClick = {
+                            if (userAnswer.isBlank()) {
+                                showInputError = true
+                            } else {
+                                isSubmitted = true
+                                isCorrect = userAnswer.trim() == correctAnswer
+                                if (isCorrect) score += 10
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MintGreen)
+                    ) {
+                        Text("Submit", color = Color(0xFF121212), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                }
+
+                // Feedback Area
+                if (isSubmitted) {
+                    val bannerColor = if (isCorrect) Color(0xFFC8E6C9) else Color(0xFFFFCDD2)
+                    val contentColor = if (isCorrect) Color(0xFF2E7D32) else Color(0xFFC62828)
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = bannerColor,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isCorrect) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = contentColor)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Brilliant! That's right", color = contentColor, fontWeight = FontWeight.Bold)
+                                    Text("+10 points", color = contentColor, style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                Column {
+                                    Text("Not quite — the answer was $correctAnswer", color = contentColor, fontWeight = FontWeight.Bold)
+                                    Text(randomEncouragement, color = contentColor, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            if (currentIndex < 5) {
+                                currentIndex++
+                                userAnswer = ""
+                                isSubmitted = false
+                                isCorrect = false
+                            } else {
+                                navController.navigate("score/$score/$playerName/$level")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MintGreen)
+                    ) {
+                        Text(
+                            text = if (currentIndex < 5) "Next Question" else "See Results",
+                            color = Color(0xFF121212),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                }
+            }
         }
     }
 }
