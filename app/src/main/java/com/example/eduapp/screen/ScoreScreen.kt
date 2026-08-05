@@ -1,5 +1,6 @@
 package com.example.eduapp.screen
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,9 @@ fun ScoreScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val sharedPreferences = remember { context.getSharedPreferences("eduapp_prefs", Context.MODE_PRIVATE) }
+    val questionsCount = remember { sharedPreferences.getInt("questions_count", 6) }
+    val maxPossibleScore = questionsCount * 10
     
     // DB & ViewModel Setup
     val db = remember {
@@ -67,9 +71,10 @@ fun ScoreScreen(
     val MintGreen = Color(0xFF64FFDA)
     val LavenderGrey = Color(0xFFD1D1E9)
 
+    val percentage = (score.toFloat() / maxPossibleScore.toFloat()) * 100
     val (encouragingLine, performanceTitle) = when {
-        score >= 50 -> "Outstanding! You're a quiz champion!" to "Incredible!"
-        score >= 30 -> "Great job! You really know your stuff." to "Well Done!"
+        percentage >= 80 -> "Outstanding! You're a quiz champion!" to "Incredible!"
+        percentage >= 50 -> "Great job! You really know your stuff." to "Well Done!"
         else -> "Good effort! Keep playing to improve your score." to "Nice Try!"
     }
 
@@ -126,7 +131,7 @@ fun ScoreScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "$score / 60",
+                            text = "$score / $maxPossibleScore",
                             color = Color.White,
                             style = MaterialTheme.typography.displayMedium,
                             fontWeight = FontWeight.Bold,

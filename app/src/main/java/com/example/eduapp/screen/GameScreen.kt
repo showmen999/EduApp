@@ -1,6 +1,12 @@
 package com.example.eduapp.screen
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -37,6 +44,15 @@ fun GameScreen(
     level: Int,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val sharedPreferences = remember { context.getSharedPreferences("eduapp_prefs", Context.MODE_PRIVATE) }
+    
+    // Load Settings
+    val questionsCount = remember { sharedPreferences.getInt("questions_count", 6) }
+    val soundEnabled = remember { sharedPreferences.getBoolean("sound_enabled", true) }
+    val vibrationEnabled = remember { sharedPreferences.getBoolean("vibration_enabled", true) }
+    val maxScore = questionsCount * 10
+
     // Colors
     val DeepIndigo = Color(0xFF2E3192)
     val Violet = Color(0xFF7E57C2)
@@ -49,7 +65,7 @@ fun GameScreen(
         val allFiles = currentContext.assets.list(level.toString()) ?: emptyArray()
         val filtered = allFiles.filter { it.contains("_") && (it.endsWith(".png") || it.endsWith(".jpg")) }
             .shuffled()
-            .take(6)
+            .take(questionsCount)
         ArrayList(filtered)
     }
 
@@ -80,14 +96,32 @@ fun GameScreen(
     )
     val randomEncouragement = remember(currentIndex) { encouragingMessages.random() }
 
+    // Feedback Helpers
+    val triggerFeedback = { correct: Boolean ->
+        if (soundEnabled) {
+            val toneType = if (correct) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_NACK
+            try {
+                ToneGenerator(AudioManager.STREAM_MUSIC, 70).startTone(toneType, 150)
+            } catch (e: Exception) { /* ignore */ }
+        }
+        if (vibrationEnabled) {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+            } else {
+                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                vibrator.vibrate(100)
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(DeepIndigo, Violet, SoftPlum)
-                )
-            )
+            .background(Brush.verticalGradient(listOf(DeepIndigo, Violet, SoftPlum)))
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -118,28 +152,11 @@ fun GameScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = playerName,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Question ${currentIndex + 1} / 6",
-                            color = LavenderGrey,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(playerName, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Question ${currentIndex + 1} / $questionsCount", color = LavenderGrey, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Surface(
-                        color = Color(0x33FFFFFF),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "$score / 60",
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            fontWeight = FontWeight.Bold
-                        )
+                    Surface(color = Color(0x33FFFFFF), shape = RoundedCornerShape(12.dp)) {
+                        Text("$score / $maxScore", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -147,11 +164,8 @@ fun GameScreen(
 
                 // Progress Bar
                 LinearProgressIndicator(
-                    progress = { (currentIndex + 1) / 6f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
+                    progress = { (currentIndex + 1) / questionsCount.toFloat() },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                     color = MintGreen,
                     trackColor = Color(0x22FFFFFF),
                 )
@@ -160,28 +174,15 @@ fun GameScreen(
 
                 // Image Card
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
-                        .shadow(12.dp, RoundedCornerShape(24.dp)),
+                    modifier = Modifier.fillMaxWidth().height(250.dp).shadow(12.dp, RoundedCornerShape(24.dp)),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (currentImageName.isNotEmpty()) {
                             val bitmap = rememberAssetImage("$level/$currentImageName")
                             if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap,
-                                    contentDescription = "Puzzle",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp),
-                                    contentScale = ContentScale.Fit
-                                )
+                                Image(bitmap = bitmap, contentDescription = "Puzzle", modifier = Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit)
                             }
                         }
                     }
@@ -192,12 +193,7 @@ fun GameScreen(
                 // Answer Input
                 OutlinedTextField(
                     value = userAnswer,
-                    onValueChange = {
-                        if (!isSubmitted) {
-                            userAnswer = it
-                            showInputError = false
-                        }
-                    },
+                    onValueChange = { if (!isSubmitted) { userAnswer = it; showInputError = false } },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Your answer", color = LavenderGrey) },
                     shape = RoundedCornerShape(20.dp),
@@ -205,23 +201,15 @@ fun GameScreen(
                     singleLine = true,
                     enabled = !isSubmitted,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        unfocusedBorderColor = Color(0x66FFFFFF),
-                        focusedBorderColor = MintGreen,
-                        disabledTextColor = Color.White,
-                        disabledBorderColor = Color(0x33FFFFFF)
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        unfocusedBorderColor = Color(0x66FFFFFF), focusedBorderColor = MintGreen,
+                        disabledTextColor = Color.White, disabledBorderColor = Color(0x33FFFFFF)
                     ),
                     isError = showInputError
                 )
 
                 if (showInputError) {
-                    Text(
-                        "Please enter an answer",
-                        color = Color(0xFFFF8A80),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.align(Alignment.Start).padding(top = 4.dp, start = 8.dp)
-                    )
+                    Text("Please enter an answer", color = Color(0xFFFF8A80), style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.Start).padding(top = 4.dp, start = 8.dp))
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -236,11 +224,10 @@ fun GameScreen(
                                 isSubmitted = true
                                 isCorrect = userAnswer.trim() == correctAnswer
                                 if (isCorrect) score += 10
+                                triggerFeedback(isCorrect)
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(28.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MintGreen)
                     ) {
@@ -253,15 +240,8 @@ fun GameScreen(
                     val bannerColor = if (isCorrect) Color(0xFFC8E6C9) else Color(0xFFFFCDD2)
                     val contentColor = if (isCorrect) Color(0xFF2E7D32) else Color(0xFFC62828)
 
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = bannerColor,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    Surface(modifier = Modifier.fillMaxWidth(), color = bannerColor, shape = RoundedCornerShape(20.dp)) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (isCorrect) {
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = contentColor)
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -282,7 +262,7 @@ fun GameScreen(
 
                     Button(
                         onClick = {
-                            if (currentIndex < 5) {
+                            if (currentIndex < questionsCount - 1) {
                                 currentIndex++
                                 userAnswer = ""
                                 isSubmitted = false
@@ -291,14 +271,12 @@ fun GameScreen(
                                 navController.navigate("score/$score/$playerName/$level")
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(28.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MintGreen)
                     ) {
                         Text(
-                            text = if (currentIndex < 5) "Next Question" else "See Results",
+                            text = if (currentIndex < questionsCount - 1) "Next Question" else "See Results",
                             color = Color(0xFF121212),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
