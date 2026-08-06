@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,14 +40,14 @@ val TranslucentWhite = Color(0x22FFFFFF)
 val FrostedWhite = Color(0x33FFFFFF)
 
 @Composable
-fun LandingScreen(navController: NavHostController, modifier: Modifier = Modifier) {
-    var username by remember { mutableStateOf("") }
-    var selectedLevel by remember { mutableIntStateOf(1) }
-    var showError by remember { mutableStateOf(false) }
+fun LandingScreen(navController: NavHostController) {
+    var username by rememberSaveable { mutableStateOf("") }
+    var selectedLevel by rememberSaveable { mutableIntStateOf(1) }
+    var showError by rememberSaveable { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(

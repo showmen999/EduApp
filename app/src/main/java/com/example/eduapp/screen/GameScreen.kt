@@ -32,8 +32,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.example.eduapp.EduAppApplication
 import com.example.eduapp.helper.rememberAssetImage
+import com.example.eduapp.viewmodel.AppViewModel
+import com.example.eduapp.viewmodel.AppViewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,17 +49,51 @@ fun GameScreen(
     currentContext: Context,
     navController: NavHostController,
     playerName: String,
-    level: Int,
-    modifier: Modifier = Modifier
+    level: Int
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sharedPreferences = remember { context.getSharedPreferences("eduapp_prefs", Context.MODE_PRIVATE) }
     
+    // ViewModel Setup
+    val app = context.applicationContext as EduAppApplication
+    val factory = remember { AppViewModelFactory(app.database.appDao()) }
+    val viewModel: AppViewModel = viewModel(factory = factory)
+
     // Load Settings
     val questionsCount = remember { sharedPreferences.getInt("questions_count", 6) }
     val soundEnabled = remember { sharedPreferences.getBoolean("sound_enabled", true) }
     val vibrationEnabled = remember { sharedPreferences.getBoolean("vibration_enabled", true) }
     val maxScore = questionsCount * 10
+
+    // Quiz State from ViewModel
+    val quizImages by viewModel.quizImages.collectAsStateWithLifecycle()
+    val currentIndex by viewModel.currentIndex.collectAsStateWithLifecycle()
+    val score by viewModel.score.collectAsStateWithLifecycle()
+    val isSubmitted by viewModel.isSubmitted.collectAsStateWithLifecycle()
+    val isCorrect by viewModel.isCorrect.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.startQuiz(context, level, questionsCount)
+    }
+
+    // Local UI State
+    var userAnswer by rememberSaveable { mutableStateOf("") }
+    var showInputError by rememberSaveable { mutableStateOf(false) }
+
+    // Manage ToneGenerator lifecycle
+    val toneGenerator = remember {
+        try {
+            ToneGenerator(AudioManager.STREAM_MUSIC, 70)
+        } catch (e: Exception) {
+            null
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            toneGenerator?.release()
+        }
+    }
 
     // Colors
     val DeepIndigo = Color(0xFF2E3192)
@@ -59,22 +101,6 @@ fun GameScreen(
     val SoftPlum = Color(0xFF8E24AA)
     val MintGreen = Color(0xFF64FFDA)
     val LavenderGrey = Color(0xFFD1D1E9)
-
-    // Quiz State
-    val quizImages = rememberSaveable {
-        val allFiles = currentContext.assets.list(level.toString()) ?: emptyArray()
-        val filtered = allFiles.filter { it.contains("_") && (it.endsWith(".png") || it.endsWith(".jpg")) }
-            .shuffled()
-            .take(questionsCount)
-        ArrayList(filtered)
-    }
-
-    var currentIndex by rememberSaveable { mutableIntStateOf(0) }
-    var score by rememberSaveable { mutableIntStateOf(0) }
-    var userAnswer by remember { mutableStateOf("") }
-    var isSubmitted by rememberSaveable { mutableStateOf(false) }
-    var isCorrect by rememberSaveable { mutableStateOf(false) }
-    var showInputError by remember { mutableStateOf(false) }
 
     val levelName = when (level) {
         1 -> "Explorer"
@@ -98,22 +124,45 @@ fun GameScreen(
 
     // Feedback Helpers
     val triggerFeedback = { correct: Boolean ->
-        if (soundEnabled) {
-            val toneType = if (correct) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_NACK
-            try {
-                ToneGenerator(AudioManager.STREAM_MUSIC, 70).startTone(toneType, 150)
-            } catch (e: Exception) { /* ignore */ }
+        val soundOn = sharedPreferences.getBoolean("sound_enabled", true)
+        val vibrationOn = sharedPreferences.getBoolean("vibration_enabled", true)
+
+        scope.launch(Dispatchers.Default) {
+            if (soundOn && toneGenerator != null) {
+                if (correct) {
+                    toneGenerator.startTone(ToneGenerator.TONE_DTMF_5, 200)
+                    delay(250)
+                    toneGenerator.startTone(ToneGenerator.TONE_DTMF_9, 200)
+                } else {
+                    toneGenerator.startTone(ToneGenerator.TONE_DTMF_3, 200)
+                    delay(250)
+                    toneGenerator.startTone(ToneGenerator.TONE_DTMF_1, 200)
+                }
+            }
         }
-        if (vibrationEnabled) {
+
+        if (vibrationOn) {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
             } else {
+                @Suppress("DEPRECATION")
                 context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+            
+            if (correct) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(100)
+                }
             } else {
-                vibrator.vibrate(100)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 150, 100, 150), -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(longArrayOf(0, 150, 100, 150), -1)
+                }
             }
         }
     }
@@ -221,10 +270,8 @@ fun GameScreen(
                             if (userAnswer.isBlank()) {
                                 showInputError = true
                             } else {
-                                isSubmitted = true
-                                isCorrect = userAnswer.trim() == correctAnswer
-                                if (isCorrect) score += 10
-                                triggerFeedback(isCorrect)
+                                viewModel.submitAnswer(userAnswer, correctAnswer)
+                                triggerFeedback(userAnswer.trim().equals(correctAnswer.trim(), ignoreCase = true))
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -262,11 +309,10 @@ fun GameScreen(
 
                     Button(
                         onClick = {
-                            if (currentIndex < questionsCount - 1) {
-                                currentIndex++
+                            if (currentIndex < quizImages.size - 1) {
+                                viewModel.nextQuestion()
                                 userAnswer = ""
-                                isSubmitted = false
-                                isCorrect = false
+                                showInputError = false
                             } else {
                                 navController.navigate("score/$score/$playerName/$level")
                             }
@@ -276,7 +322,7 @@ fun GameScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = MintGreen)
                     ) {
                         Text(
-                            text = if (currentIndex < questionsCount - 1) "Next Question" else "See Results",
+                            text = if (currentIndex < quizImages.size - 1) "Next Question" else "See Results",
                             color = Color(0xFF121212),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp

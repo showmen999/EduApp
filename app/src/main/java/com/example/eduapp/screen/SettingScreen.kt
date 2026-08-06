@@ -31,13 +31,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.room.Room
-import com.example.eduapp.database.AppDatabase
+import com.example.eduapp.EduAppApplication
 import com.example.eduapp.viewmodel.AppViewModel
 import com.example.eduapp.viewmodel.AppViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingScreen(navController: NavHostController, modifier: Modifier = Modifier) {
+fun SettingScreen(navController: NavHostController) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("eduapp_prefs", Context.MODE_PRIVATE) }
 
@@ -47,8 +47,8 @@ fun SettingScreen(navController: NavHostController, modifier: Modifier = Modifie
     var vibrationEnabled by remember { mutableStateOf(sharedPreferences.getBoolean("vibration_enabled", true)) }
     
     // Database for Reset
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "app_db").build() }
-    val factory = remember { AppViewModelFactory(db.appDao()) }
+    val app = context.applicationContext as EduAppApplication
+    val factory = remember { AppViewModelFactory(app.database.appDao()) }
     val viewModel: AppViewModel = viewModel(factory = factory)
 
     var showResetDialog by remember { mutableStateOf(false) }

@@ -23,8 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.room.Room
-import com.example.eduapp.database.AppDatabase
+import com.example.eduapp.EduAppApplication
 import com.example.eduapp.database.User
 import com.example.eduapp.viewmodel.AppViewModel
 import com.example.eduapp.viewmodel.AppViewModelFactory
@@ -35,22 +34,19 @@ fun ScoreScreen(
     navController: NavHostController,
     score: Int,
     playerName: String,
-    level: Int,
-    modifier: Modifier = Modifier
+    level: Int
 ) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("eduapp_prefs", Context.MODE_PRIVATE) }
     val questionsCount = remember { sharedPreferences.getInt("questions_count", 6) }
     val maxPossibleScore = questionsCount * 10
     
-    // DB & ViewModel Setup
-    val db = remember {
-        Room.databaseBuilder(context, AppDatabase::class.java, "app_db").build()
-    }
-    val factory = remember { AppViewModelFactory(db.appDao()) }
+    // ViewModel Setup
+    val app = context.applicationContext as EduAppApplication
+    val factory = remember { AppViewModelFactory(app.database.appDao()) }
     val viewModel: AppViewModel = viewModel(factory = factory)
     
-    // Save score exactly once
+    // Save score exactly once using ViewModel logic
     LaunchedEffect(Unit) {
         val levelName = when(level) {
             1 -> "Explorer"
@@ -196,6 +192,7 @@ fun ScoreScreen(
                 // Play Again Button (fixed at bottom of Column)
                 Button(
                     onClick = { 
+                        viewModel.resetQuizState()
                         navController.navigate("landing") {
                             popUpTo("landing") { inclusive = true }
                         }

@@ -23,27 +23,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.room.Room
+import com.example.eduapp.EduAppApplication
 import com.example.eduapp.database.AppDatabase
 import com.example.eduapp.viewmodel.AppViewModel
 import com.example.eduapp.viewmodel.AppViewModelFactory
 
 //test db screen
 @Composable
-fun TestDBScreen(currentContext: Context, modifier: Modifier = Modifier) {
+fun TestDBScreen(currentContext: Context) {
     //steps to work with DB
-    val db = Room.databaseBuilder(
-        currentContext,
-        AppDatabase::class.java,
-        "app_db"
-    ).build()
-    val factory = AppViewModelFactory(db.appDao())
+    val app = currentContext.applicationContext as EduAppApplication
+    val factory = AppViewModelFactory(app.database.appDao())
     val viewModel: AppViewModel = viewModel(factory = factory)
     val users by viewModel.users.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var name by remember { mutableStateOf("") }
     Column(
-        modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
